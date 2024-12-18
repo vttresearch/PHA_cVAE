@@ -1,44 +1,26 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from tensorflow.python.keras import Input
-from tensorflow.python.keras.layers import (InputLayer, Conv2D, Conv2DTranspose,
-                                            BatchNormalization, LeakyReLU, MaxPool2D, UpSampling2D,
-                                            Reshape, GlobalAveragePooling2D, Layer, Multiply)
-from tensorflow.python.keras.models import Model
 from tensorflow import keras as k
-import os, random
-import pickle
-import sys
-import numpy as np
-import collections
 from aux import *             # load all functions from auxiliary file to remove a bit of clutter
 from models import *
 
-#strategy = tf.distribute.MirroredStrategy()
+
 
 
 def main():
-    inputdatadir="/scratch/project_2005440/input_files/training_5_new"
-    testdatadir = "/scratch/project_2005440/input_files/testing_5_new"
+    inputdatadir="input_files/training_5_new"
+    testdatadir = "input_files/testing_5_new"
 
-    #with strategy.scope():
 
-    d19e = Darknet19Encoder()
-    print("HERE")
+    d19e = Encoder()
     d19e.model = d19e.Build()
     d19e.model.summary()
-    d19d = Darknet19Decoder()
+    d19d = Decoder()
     d19d.model = d19d.Build()
     d19d.model.summary()
 
-
-    # CVAE all together!
-    #encoder =  d19e.model
-    #decoder = d19d.model
-
-
-    encoder = tf.keras.models.load_model("/scratch/project_2005440/tuulas_models/saved_models/encoder_lstm_transformer_heads_18_input_5_new_new_loss_v6")
-    decoder = tf.keras.models.load_model("/scratch/project_2005440/tuulas_models/saved_models/decoder_lstm_transformer_heads_18_input_5_new_new_loss_v6")
+    encoder = tf.keras.models.load_model("encoder_lstm_transformer_heads_18_input_5_new_new_loss_v6")
+    decoder = tf.keras.models.load_model("decoder_lstm_transformer_heads_18_input_5_new_new_loss_v6")
 
     x = layers.Input(shape=(700, 75))
     x2 = layers.Input(shape=(700, 7))
@@ -48,30 +30,13 @@ def main():
 
 
     z = layers.Lambda(sampling, output_shape=(latent_dim,))([mean, log_var])
-    print(z.shape)
-    #z = layers.Reshape(latent_dim)(z)
     y2 = decoder([z, c])
-    #checkpoint_path = "/scratch/project_2004076/workpad/scsandra/chem2bio/src/training_2/cp.ckpt"
     cvae = k.Model(inputs=[x, c,x2,x3], outputs=[y2], name='cvae')
-    #cvae.load_weights(checkpoint_path)
-
-    #cvae.add_loss(loss(x2,y2, mean,log_var,alpha=1, beta=0))
-    #cvae.add_loss(ls_loss(mean))
-    #cvae.add_metric(ls_loss(mean), name='latent_loss', aggregation='mean')
 
     cvae.add_loss(KL_loss(mean,log_var))
     cvae.add_metric(KL_loss(mean,log_var), name='kl_loss', aggregation='mean')
     cvae.compile(optimizer=k.optimizers.Adam(learning_rate=0.001, decay=1e-6),loss=tf.nn.softmax_cross_entropy_with_logits, metrics="categorical_accuracy")
-    print(cvae.summary())
-
-
-
-    #checkpoint_dir = os.path.dirname(checkpoint_path)
-
-    # Create a callback that saves the model's weights
-    #cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_dir,
-    #                         save_weights_only=True,
-    #                         verbose=1)
+ 
 
 
     ds = create_data_pipeline(inputdatadir, 980)
@@ -110,27 +75,14 @@ def main():
                 y_test = [sequence_part_test[i]]
 
 
-                #vx = [vcontact_map,
-                      #vcondition.reshape(len(vcondition),85),
-                      #vchem_features,
-                      #vsec_struct]
-                #print(vsequence.shape)
-                #print("batch_size")
-                #print(batch_size)
-                #print(trrosetta_part[i].shape)
-                #print(condition_part[i].shape)
-                #print(vcondition.shape)
-                #print(y)
                 cvae.fit(x=x,y=y, batch_size=batch_size, shuffle=False, epochs=1, verbose=1, validation_data=(x_test,y_test))
 
             except:
                 raise
-                print("something failed")
                 
         saving_number = saving_number + 1
-        decoder.save("/scratch/project_2005440/tuulas_models/saved_models/decoder_lstm_transformer_heads_18_input_5_new_new_loss_v7")
-        encoder.save("/scratch/project_2005440/tuulas_models/saved_models/encoder_lstm_transformer_heads_18_input_5_new_new_loss_v7")
-            # cvae.save("model-" + str(saving_number))
+        decoder.save("decoder_lstm_transformer_heads_18_input_5_new_new_loss_v7")
+        encoder.save("encoder_lstm_transformer_heads_18_input_5_new_new_loss_v7")
         print("Saved model-" + str(saving_number) + " to disk")
                 
 
